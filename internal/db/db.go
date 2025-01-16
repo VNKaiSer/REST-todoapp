@@ -16,3 +16,10 @@ type User struct {
     UpdatedAt    time.Time `bun:"updated_at,nullzero,default:current_timestamp"`
     DeletedAt    time.Time `bun:"deleted_at,soft_delete"`
 }
+
+type List struct {
+	bun.BaseModel `bun:"table:lists,alias:l"`
+
+	ID           int64     `bun:"id,pk,autoincrement"`
+	
+}
