@@ -1,0 +1,13 @@
+dev: true
+port: 8000
+
+db:
+  host: 51.79.203.158
+  port: 5432
+  user: postgres
+  password: 02052002Dat
+  database: bunapp
+
+jwt:
+  secret: secret
+  expiration: 1h
