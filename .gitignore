@@ -36,6 +36,5 @@ supabase/*
 cmd/api/__debug*
 
 # Ignore local bunapp development files
-bunapp/*
 
-bunapp/embed/config/dev.yaml
+bunapp/embed/config/*

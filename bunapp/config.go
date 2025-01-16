@@ -2,6 +2,7 @@ package bunapp
 
 import (
 	"embed"
+	"fmt"
 	"io/fs"
 	"path"
 	"sync"
@@ -41,6 +42,13 @@ type AppConfig	struct {
 		Secret string
 		Expiration string
 	}
+	Supabase struct {
+		StorageURI string
+		ProjectAPIKey string
+		JwtSecret string
+		ContractBucket string
+	}
+	DBURL string
 }
 
 func ReadConfig(fsys fs.FS, service, env string) (*AppConfig, error) {
@@ -56,8 +64,8 @@ func ReadConfig(fsys fs.FS, service, env string) (*AppConfig, error) {
 		return nil, err
 	}
 
-	
-
-
+	cfg.DBURL = "postgres://" + cfg.Db.User + ":" + cfg.Db.Password + "@" + cfg.Db.Host + ":" + fmt.Sprint(cfg.Db.Port) + "/" + cfg.Db.Database + "?sslmode=disable"
+	fmt.Printf("DBURL: %s\n", cfg.DBURL)
+	return cfg, nil
 }
 
