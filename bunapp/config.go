@@ -3,7 +3,10 @@ package bunapp
 import (
 	"embed"
 	"io/fs"
+	"path"
 	"sync"
+
+	"gopkg.in/yaml.v3"
 )
 var (
 	//go:embed embed
@@ -40,5 +43,21 @@ type AppConfig	struct {
 	}
 }
 
-func ReadConfig(fsys fs.FS, service, env string) (*AppConfig, error) {}
+func ReadConfig(fsys fs.FS, service, env string) (*AppConfig, error) {
+	b, err := fs.ReadFile(fsys, path.Join("config", env+".yaml"))
+	
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := new(AppConfig)
+
+	if err := yaml.Unmarshal(b, cfg); err != nil {
+		return nil, err
+	}
+
+	
+
+
+}
 
