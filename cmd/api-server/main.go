@@ -12,11 +12,11 @@ import (
 	"todo-app/httputil"
 	"todo-app/internal/routes"
 
+	_ "todo-app/internal/docs"
+
 	"github.com/uptrace/bun/migrate"
 	"github.com/urfave/cli/v2"
 )
-
-
 
 func main() {
 	app := &cli.App{
@@ -35,7 +35,6 @@ func main() {
 	}
 
 	routes.SetupRoutes()
-	
 	if err := app.Run(os.Args); err != nil {
 		log.Fatal(err)
 	}

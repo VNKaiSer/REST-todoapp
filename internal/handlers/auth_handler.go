@@ -26,6 +26,15 @@ type AuthHandler struct {
 	app *bunapp.App
 }
 
+type TokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
 // CheckToken implements handlers.AuthHandlerService.
 func (a *AuthHandler) CheckToken(w http.ResponseWriter, r *http.Request) {
 
@@ -48,7 +57,15 @@ func NewAuthHandler(app *bunapp.App) *AuthHandler {
 	return &AuthHandler{app: app}
 }
 
-// Login implements handlers.AuthHandlerService.
+// @Summary User login
+// @Description Đăng nhập với username và password
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body dtos.AuthDTO true "Login request body"
+// @Success 200
+// @Failure 400 {object} httperror.ErrResponse
+// @Router /api/auth/login [post]
 func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var authDTO dtos.AuthDTO
 	err := json.NewDecoder(r.Body).Decode(&authDTO)
@@ -72,7 +89,7 @@ func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	IsMatch, err := utils.ComparePassword(user.PasswordHash, authDTO.Password)
 	if err != nil {
-		render.Render(w, r, httperror.ErrForbidden(errors.New(err.Error())))
+		render.Render(w, r, httperror.ErrForbidden(errors.New("invalid password")))
 		return
 	}
 
@@ -89,9 +106,9 @@ func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, httpresponse.SingleResponse{
 		Message: "success",
-		Data: map[string]string{
-			"token":        Token,
-			"refreshToken": RefreshToken,
+		Data: TokenResponse{
+			AccessToken:  Token,
+			RefreshToken: RefreshToken,
 		},
 		Status: http.StatusOK,
 	})
@@ -99,10 +116,16 @@ func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 }
 
 // RefreshToken implements handlers.AuthHandlerService.
+// @Summary Refresh token
+// @Description Refresh token if access token is expired and generate new access token and refresh token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body RefreshTokenRequest true "Refresh token request body"
+// @Success 200 {object} TokenResponse
+// @Failure 400 {object} httperror.ErrResponse
+// @Router /api/auth/refresh-token [post]
 func (a *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	type RefreshTokenRequest struct {
-		RefreshToken string `json:"refresh_token"`
-	}
 
 	var req RefreshTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -161,6 +184,15 @@ func (a *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // Register implements handlers.AuthHandlerService.
+// @Summary User register
+// @Description User register todo app
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param request body dtos.AuthDTO true "User register request body"
+// @Success 200 {object} TokenResponse
+// @Failure 400 {object} httperror.ErrResponse
+// @Router /api/auth/register [post]
 func (a *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var authDTO dtos.AuthDTO
 	err := json.NewDecoder(r.Body).Decode(&authDTO)
@@ -215,9 +247,9 @@ func (a *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render.JSON(w, r, httpresponse.SingleResponse{
-		Data: map[string]any{
-			"assess_token":  Token,
-			"refresh_token": RefreshToken,
+		Data: TokenResponse{
+			AccessToken:  Token,
+			RefreshToken: RefreshToken,
 		},
 	})
 }

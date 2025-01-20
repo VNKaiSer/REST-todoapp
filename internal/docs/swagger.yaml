@@ -1,0 +1,128 @@
+definitions:
+  dtos.AuthDTO:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    type: object
+  handlers.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    type: object
+  handlers.TokenResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  httperror.ErrResponse:
+    properties:
+      code:
+        description: Application-specific error code
+        type: integer
+      error:
+        description: Application-level error message, for debugging
+        type: string
+      status:
+        description: User-level status message
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /api/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Đăng nhập với username và password
+      parameters:
+      - description: Login request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.AuthDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrResponse'
+      summary: User login
+      tags:
+      - Auth
+  /api/auth/refresh-token:
+    post:
+      consumes:
+      - application/json
+      description: Refresh token if access token is expired and generate new access
+        token and refresh token
+      parameters:
+      - description: Refresh token request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrResponse'
+      summary: Refresh token
+      tags:
+      - Auth
+  /api/auth/register:
+    post:
+      consumes:
+      - application/json
+      description: User register todo app
+      parameters:
+      - description: User register request body
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/dtos.AuthDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.TokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/httperror.ErrResponse'
+      summary: User register
+      tags:
+      - Auth
+  /api/ping:
+    get:
+      consumes:
+      - application/json
+      description: Kiểm tra server có hoạt động không
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: pong
+          schema:
+            type: string
+      summary: Ping the server
+      tags:
+      - Ping
+swagger: "2.0"

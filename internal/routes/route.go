@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi"
 	log "github.com/sirupsen/logrus"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 func SetupRoutes() {
@@ -19,6 +20,7 @@ func SetupRoutes() {
 	bunapp.OnStart("example.init", func(ctx context.Context, app *bunapp.App) error {
 		router := app.Router()
 		serverHandler := handlers.NewServerHandler(app)
+		router.Get("/docs/*", httpSwagger.WrapHandler)
 		router.Route("/api", func(r chi.Router) {
 			r.Get("/ping", serverHandler.ReplayAppCheck)
 			r.Route("/auth", func(r chi.Router) {
