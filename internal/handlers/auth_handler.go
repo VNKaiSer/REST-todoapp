@@ -1,9 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 	"todo-app/bunapp"
 	"todo-app/httputil/httperror"
@@ -22,12 +25,27 @@ type AuthHandler struct {
 	app *bunapp.App
 }
 
+// CheckToken implements handlers.AuthHandlerService.
+func (a *AuthHandler) CheckToken(w http.ResponseWriter, r *http.Request) {
+
+	claims, ok := r.Context().Value("current_user").(*JwtPayload)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	fmt.Printf("Current user: %+v\n", claims)
+	render.JSON(w, r, httpresponse.SingleResponse{
+		Message: "success",
+		Data:    claims,
+		Status:  http.StatusOK,
+	})
+}
+
 var _ handlers.AuthHandlerService = (*AuthHandler)(nil)
 
 func NewAuthHandler(app *bunapp.App) *AuthHandler {
 	return &AuthHandler{app: app}
 }
-
 
 // Login implements handlers.AuthHandlerService.
 func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -66,11 +84,11 @@ func (a *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user := &db.User{
-        Username:     authDTO.Username,
-        PasswordHash: passwordHash,
-    }
-    _, err = a.app.DB().NewInsert().Model(user).Returning("*").Exec(r.Context())
-	
+		Username:     authDTO.Username,
+		PasswordHash: passwordHash,
+	}
+	_, err = a.app.DB().NewInsert().Model(user).Returning("*").Exec(r.Context())
+
 	if err != nil {
 		render.Render(w, r, httperror.ErrInternalError(err))
 		return
@@ -82,11 +100,11 @@ func (a *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// save db
-    _, err = a.app.DB().NewInsert().Model(&db.Session{
-        AccessToken: Token,
-        RefreshToken: RefreshToken,
-        UserID: user.ID,
-    }).Exec(r.Context())
+	_, err = a.app.DB().NewInsert().Model(&db.Session{
+		AccessToken:  Token,
+		RefreshToken: RefreshToken,
+		UserID:       user.ID,
+	}).Exec(r.Context())
 
 	if err != nil {
 		render.Render(w, r, httperror.ErrInternalError(err))
@@ -95,118 +113,144 @@ func (a *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	render.JSON(w, r, httpresponse.SingleResponse{
 		Data: map[string]any{
-			"assess_token": Token,
+			"assess_token":  Token,
+			"refresh_token": RefreshToken,
 		},
 	})
 }
 
 type JwtPayload struct {
-	Username string `json:"username"`
-	Sub          int64               `json:"sub"`
-	Exp          int64                `json:"exp"`
-	Iat          int64                `json:"iat"`
-	IsAnonymous  bool                 `json:"is_anonymous"`
+	Username    string `json:"username"`
+	Sub         int64  `json:"sub"`
+	Exp         int64  `json:"exp"`
+	Iat         int64  `json:"iat"`
+	IsAnonymous bool   `json:"is_anonymous"`
 	jwt.RegisteredClaims
 }
 
 type JWT struct {
-    secretKey string
-    refreshSecretKey string
-    accessDuration time.Duration
-    refreshDuration time.Duration
+	secretKey        string
+	refreshSecretKey string
+	accessDuration   time.Duration
+	refreshDuration  time.Duration
 }
 
 func (a *AuthHandler) NewJWT() *JWT {
-    return &JWT{
-        secretKey: a.app.Config().Jwt.Secret,
-        refreshSecretKey: a.app.Config().Jwt.Secret,
-        accessDuration: time.Hour * 24,
-        refreshDuration: time.Hour * 24 * 7,
-    }
+	return &JWT{
+		secretKey:        a.app.Config().Jwt.Secret,
+		refreshSecretKey: a.app.Config().Jwt.Secret,
+		accessDuration:   time.Hour * 24,
+		refreshDuration:  time.Hour * 24 * 7,
+	}
 }
 
-
 func (j *JWT) GenerateTokenPair(username string, uid int64, isAnonymous bool) (accessToken string, refreshToken string, err error) {
-    now := time.Now()
-    // Create access token
-    accessClaims := JwtPayload{
-		Username: username,
-        Sub:      uid,      
-        Exp:      now.Add(time.Duration(j.accessDuration)).Unix(),
-        Iat:      now.Unix(),
-        IsAnonymous: isAnonymous,
-        RegisteredClaims: jwt.RegisteredClaims{
-           ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.accessDuration))),
-        },
-    }
+	now := time.Now()
+	// Create access token
+	accessClaims := JwtPayload{
+		Username:    username,
+		Sub:         uid,
+		Exp:         now.Add(time.Duration(j.accessDuration)).Unix(),
+		Iat:         now.Unix(),
+		IsAnonymous: isAnonymous,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.accessDuration))),
+		},
+	}
 
-    accessTokenObject := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
-    accessToken, err = accessTokenObject.SignedString([]byte(j.secretKey))
-    if err != nil {
-        return "", "", fmt.Errorf("failed to sign access token: %w", err)
-    }
+	accessTokenObject := jwt.NewWithClaims(jwt.SigningMethodHS256, accessClaims)
+	accessToken, err = accessTokenObject.SignedString([]byte(j.secretKey))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign access token: %w", err)
+	}
 
-    // Create refresh token
-    refreshClaims := JwtPayload{
-		Username: username,
-        Sub:      uid,
-        Exp:      now.Add(time.Duration(j.refreshDuration)).Unix(),
-        Iat:      now.Unix(),
-        IsAnonymous: isAnonymous,
-        RegisteredClaims: jwt.RegisteredClaims{
-            ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.refreshDuration))),
-            ID: uuid.NewV4().String(),
-        },
-    }
+	// Create refresh token
+	refreshClaims := JwtPayload{
+		Username:    username,
+		Sub:         uid,
+		Exp:         now.Add(time.Duration(j.refreshDuration)).Unix(),
+		Iat:         now.Unix(),
+		IsAnonymous: isAnonymous,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.refreshDuration))),
+			ID:        uuid.NewV4().String(),
+		},
+	}
 
-
-    refreshTokenObject := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
-    refreshToken, err = refreshTokenObject.SignedString([]byte(j.refreshSecretKey))
+	refreshTokenObject := jwt.NewWithClaims(jwt.SigningMethodHS256, refreshClaims)
+	refreshToken, err = refreshTokenObject.SignedString([]byte(j.refreshSecretKey))
 	// save to db
-    if err != nil {
-        return "", "", fmt.Errorf("failed to sign refresh token: %w", err)
-    }
-    return accessToken, refreshToken, nil
+	if err != nil {
+		return "", "", fmt.Errorf("failed to sign refresh token: %w", err)
+	}
+	return accessToken, refreshToken, nil
 }
 
 // VerifyAccessToken verify access token
 func (j *JWT) VerifyAccessToken(tokenString string) (*JwtPayload, error) {
-    claims := &JwtPayload{}
+	claims := &JwtPayload{}
 
-    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-       if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-           return nil, fmt.Errorf("invalid signing method")
-       }
-       return []byte(j.secretKey), nil
-   })
-   if err != nil {
-        return nil, err
-    }
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("invalid signing method")
+		}
+		return []byte(j.secretKey), nil
+	})
+	if err != nil {
+		return nil, err
+	}
 
-    if !token.Valid {
-        return nil, fmt.Errorf("invalid token")
-    }
-   
-   return claims, nil
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return claims, nil
 }
 
 // VerifyRefreshToken verify refresh token
 func (j *JWT) VerifyRefreshToken(tokenString string) (*JwtPayload, error) {
-    claims := &JwtPayload{}
+	claims := &JwtPayload{}
 
-    token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-       if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-           return nil, fmt.Errorf("invalid signing method")
-       }
-       return []byte(j.refreshSecretKey), nil
-   })
-   if err != nil {
-        return nil, err
-    }
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("invalid signing method")
+		}
+		return []byte(j.refreshSecretKey), nil
+	})
+	if err != nil {
+		return nil, err
+	}
 
-    if !token.Valid {
-        return nil, fmt.Errorf("invalid token")
-    }
-   
-   return claims, nil
+	if !token.Valid {
+		return nil, fmt.Errorf("invalid token")
+	}
+
+	return claims, nil
+}
+
+func (a *AuthHandler) Authorization() func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenString := r.Header.Get("Authorization")
+			var err error
+			if tokenString == "" {
+				err = errors.New("no token provided")
+				render.Render(w, r, httperror.ErrUnAuthorized(err))
+				return
+			}
+
+			tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+
+			claims, err := a.NewJWT().VerifyAccessToken(tokenString)
+			if err != nil {
+				render.Render(w, r, httperror.ErrUnAuthorized(err))
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), "current_user", claims)
+			r = r.WithContext(ctx)
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
