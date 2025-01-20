@@ -363,29 +363,27 @@ func (j *JWT) VerifyRefreshToken(tokenString string) (*JwtPayload, error) {
 	return claims, nil
 }
 
-func (a *AuthHandler) Authorization() func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			tokenString := r.Header.Get("Authorization")
-			var err error
-			if tokenString == "" {
-				err = errors.New("no token provided")
-				render.Render(w, r, httperror.ErrUnAuthorized(err))
-				return
-			}
+func (a *AuthHandler) Authorization(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		tokenString := r.Header.Get("Authorization")
+		var err error
+		if tokenString == "" {
+			err = errors.New("no token provided")
+			render.Render(w, r, httperror.ErrUnAuthorized(err))
+			return
+		}
 
-			tokenString = strings.TrimPrefix(tokenString, "Bearer ")
+		tokenString = strings.TrimPrefix(tokenString, "Bearer ")
 
-			claims, err := a.NewJWT().VerifyAccessToken(tokenString)
-			if err != nil {
-				render.Render(w, r, httperror.ErrUnAuthorized(err))
-				return
-			}
+		claims, err := a.NewJWT().VerifyAccessToken(tokenString)
+		if err != nil {
+			render.Render(w, r, httperror.ErrUnAuthorized(err))
+			return
+		}
 
-			ctx := context.WithValue(r.Context(), constants.CurrentUser, claims)
-			r = r.WithContext(ctx)
+		ctx := context.WithValue(r.Context(), constants.CurrentUser, claims)
+		r = r.WithContext(ctx)
 
-			next.ServeHTTP(w, r)
-		})
-	}
+		next.ServeHTTP(w, r)
+	})
 }
