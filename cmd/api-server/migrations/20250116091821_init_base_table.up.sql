@@ -4,6 +4,7 @@ CREATE TABLE public.users(
     password varchar(255) NOT NULL,
     uid character varying NOT NULL UNIQUE,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
-    updated_at timestamp with time zone NOT NULL DEFAULT now()
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    PRIMARY KEY (id)
 );
 --bun:split

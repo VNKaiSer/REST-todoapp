@@ -40,7 +40,7 @@ type AppConfig	struct {
 	}
 	Jwt struct {
 		Secret string
-		Expiration string
+		RefreshSecret string
 	}
 	Supabase struct {
 		StorageURI string

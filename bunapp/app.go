@@ -34,7 +34,7 @@ func ContextWithApp(ctx context.Context, app *App) context.Context {
 type App struct {
 	ctx context.Context
 	cfg *AppConfig
-
+	
 	stopping uint32
 	stopCh   chan struct{}
 
