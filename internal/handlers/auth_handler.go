@@ -11,6 +11,7 @@ import (
 	"todo-app/bunapp"
 	"todo-app/httputil/httperror"
 	"todo-app/httputil/httpresponse"
+	"todo-app/internal/constants"
 	"todo-app/internal/db"
 	"todo-app/internal/dtos"
 	handlers "todo-app/internal/services"
@@ -49,12 +50,114 @@ func NewAuthHandler(app *bunapp.App) *AuthHandler {
 
 // Login implements handlers.AuthHandlerService.
 func (a *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	fmt.Println(r.Body)
+	var authDTO dtos.AuthDTO
+	err := json.NewDecoder(r.Body).Decode(&authDTO)
+	fmt.Println(authDTO)
+	if err != nil {
+		render.Render(w, r, httperror.ErrInvalidRequest(err))
+		return
+	}
+
+	if authDTO.Username == "" || authDTO.Password == "" {
+		render.Render(w, r, httperror.ErrInvalidRequest(errors.New("email or password is required")))
+		return
+	}
+
+	var user db.User
+	err = a.app.DB().NewSelect().Model(&user).Where("username = ?", authDTO.Username).Scan(r.Context())
+	if err != nil {
+		render.Render(w, r, httperror.ErrForbidden(errors.New(err.Error())))
+		return
+	}
+
+	IsMatch, err := utils.ComparePassword(user.PasswordHash, authDTO.Password)
+	if err != nil {
+		render.Render(w, r, httperror.ErrForbidden(errors.New(err.Error())))
+		return
+	}
+
+	if !IsMatch {
+		render.Render(w, r, httperror.ErrForbidden(errors.New("invalid password")))
+		return
+	}
+
+	Token, RefreshToken, err := a.NewJWT().GenerateTokenPair(authDTO.Username, user.ID, false)
+	if err != nil {
+		render.Render(w, r, httperror.ErrInternalError(err))
+		return
+	}
+
+	render.JSON(w, r, httpresponse.SingleResponse{
+		Message: "success",
+		Data: map[string]string{
+			"token":        Token,
+			"refreshToken": RefreshToken,
+		},
+		Status: http.StatusOK,
+	})
+
 }
 
 // RefreshToken implements handlers.AuthHandlerService.
 func (a *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
-	panic("unimplemented")
+	type RefreshTokenRequest struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+
+	var req RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		render.Render(w, r, httperror.ErrInvalidRequest(err))
+		return
+	}
+
+	// Kiểm tra nếu Refresh Token không tồn tại
+	if req.RefreshToken == "" {
+		render.Render(w, r, httperror.ErrInvalidRequest(fmt.Errorf("refresh token is required")))
+		return
+	}
+
+	// Giải mã và xác thực Refresh Token
+	claims, err := a.NewJWT().VerifyRefreshToken(req.RefreshToken)
+	if err != nil {
+		render.Render(w, r, httperror.ErrUnAuthorized(fmt.Errorf("invalid or expired refresh token")))
+		return
+	}
+
+	// Kiểm tra userId từ Refresh Token
+	userId := claims.Sub
+	if userId == 0 {
+		render.Render(w, r, httperror.ErrUnAuthorized(fmt.Errorf("invalid user ID in refresh token")))
+		return
+	}
+
+	// Kiểm tra Refresh Token từ database (nếu bạn lưu refresh token)
+	var sessions db.Session
+	err = a.app.DB().NewSelect().Model(&sessions).Where("refresh_token = ?", req.RefreshToken).Scan(r.Context())
+	if err != nil {
+		render.Render(w, r, httperror.ErrInternalError(errors.New("refresh token is not valid")))
+		return
+	}
+
+	// Tạo Access Token mới
+	AccessToken, RefreshToken, err := a.NewJWT().GenerateTokenPair(claims.Username, userId, false)
+	if err != nil {
+		render.Render(w, r, httperror.ErrInternalError(err))
+		return
+	}
+
+	// Cập nhật db token mới
+	_, err = a.app.DB().NewUpdate().Model(&sessions).Where("refresh_token = ?", req.RefreshToken).Set("access_token = ?", AccessToken).Set("refresh_token = ?", RefreshToken).Exec(r.Context())
+	if err != nil {
+		render.Render(w, r, httperror.ErrInternalError(err))
+		return
+	}
+
+	// Trả về token mới
+	response := map[string]string{
+		"access_token":  AccessToken,
+		"refresh_token": RefreshToken,
+	}
+	render.JSON(w, r, response)
 }
 
 // Register implements handlers.AuthHandlerService.
@@ -247,7 +350,7 @@ func (a *AuthHandler) Authorization() func(http.Handler) http.Handler {
 				return
 			}
 
-			ctx := context.WithValue(r.Context(), "current_user", claims)
+			ctx := context.WithValue(r.Context(), constants.CurrentUser, claims)
 			r = r.WithContext(ctx)
 
 			next.ServeHTTP(w, r)
