@@ -74,3 +74,7 @@ type TodoTag struct {
 	CreatedAt     time.Time `bun:"created_at,nullzero,default:current_timestamp"`
 	UpdatedAt     time.Time `bun:"updated_at,nullzero,default:current_timestamp"`
 }
+
+type DB struct {
+	*bun.DB
+}
