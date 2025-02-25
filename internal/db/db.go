@@ -69,6 +69,7 @@ type TodoTag struct {
 	ID            int64     `bun:"id,pk,autoincrement"`
 	Todo          *Todo     `bun:"rel:belongs-to,join:id=todo_id"`
 	TodoID        int64     `bun:"todo_id,notnull"`
+	List          string    `bun:"list_id,notnull"`
 	Tag           *Tag      `bun:"rel:belongs-to,join:id=tag_id"`
 	TagID         int64     `bun:"tag_id,notnull"`
 	CreatedAt     time.Time `bun:"created_at,nullzero,default:current_timestamp"`
